@@ -1,23 +1,37 @@
-Bus Booking System Backend
+# Bus Booking System Backend
 
+### 1. 
+
+```
 ./gradlew clean build -x test
+```
 
-# 1. Build Config Server Image
+### 1. Build Config Server Image
+```
 docker build --build-arg JAR_FILE=config-server-0.0.1-SNAPSHOT.jar -t com.booking/config-server:0.0.1-SNAPSHOT ./config-server
+```
 
-# 2. Build User Service Image
+### 2. Build User Service Image
+```
 docker build --build-arg JAR_FILE=user-service-0.0.1-SNAPSHOT.jar -t com.booking/user-service:0.0.1-SNAPSHOT ./services/user-service
+```
 
-# 3. Build API Gateway Image
+### 3. Build API Gateway Image
+```
 docker build --build-arg JAR_FILE=api-gateway-0.0.1-SNAPSHOT.jar -t com.booking/api-gateway:0.0.1-SNAPSHOT ./api-gateway
+```
 
-# 4. Deploy with Docker Swarm
+### 4. Deploy with Docker Swarm
+```
 docker stack deploy -c docker-compose.yml bus-booking-stack
+```
 
 ### Remove old containers
+```
 docker stack rm bus-booking-stack
+```
 
-# 1. Generate SSH Key
+### 1. Generate SSH Key
 
 ``` Powershell
 ssh-keygen -t rsa -b 4096 -C "your_address@gmail.com"
@@ -27,7 +41,7 @@ Enter file in which to save the key (C:\Users\username/.ssh/id_rsa): vexesieure_
 Enter passphrase (empty for no passphrase): YourPassphrase
 Enter same passphrase again: YourPassphrase
 
-# 2. Locate your key
+### 2. Locate your key
 
 The command will save two files in the .ssh directory
 
