@@ -1,0 +1,60 @@
+networks:
+  # Define a common overlay network for all services
+  booking-network:
+    driver: overlay
+
+services:
+  # --- 1. Configuration Server ---
+  # Provides externalized configuration to other services
+  config-server:
+    hostname: config-server
+    image: com.booking/config-server:0.0.1-SNAPSHOT
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+    volumes:
+      - C:/Users/thienanle04/.ssh/vexesieure_config_server_repo_rsa:/root/.ssh/id_rsa_config:ro 
+    networks:
+      - booking-network
+
+  # --- 2. User Service ---
+  user-service:
+    hostname: user-service
+    image: com.booking/user-service:0.0.1-SNAPSHOT
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+    environment:
+      - SPRING_DATASOURCE_URL=${POSTGRES_URL}
+      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USERNAME}
+      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
+      - PORT=${PORT}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - SPRING_CLOUD_CONFIG_URI=${CONFIG_SERVER_URL}
+    depends_on:
+      - config-server
+    networks:
+      - booking-network
+
+  # --- 3. API Gateway ---
+  api-gateway:
+    hostname: api-gateway
+    image: com.booking/api-gateway:0.0.1-SNAPSHOT
+    ports:
+      - "80:8080" # Map host port 80 to container's 8080
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: none
+    environment:
+      # Point to the Config Server
+      - SPRING_CLOUD_CONFIG_URI=${CONFIG_SERVER_URL}
+    # The API Gateway must be configured (via config-server) to route requests to the
+    # service name 'user-service' on port 8080.
+    depends_on:
+      - config-server
+      - user-service 
+    networks:
+      - booking-network
