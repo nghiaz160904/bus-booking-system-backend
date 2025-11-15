@@ -6,7 +6,7 @@ plugins {
 
 group = "com.booking"
 version = "0.0.1-SNAPSHOT"
-description = "Bus Booking System API Gateway"
+description = "Bus Booking System Service Registry"
 
 repositories {
 	mavenCentral()
@@ -15,13 +15,11 @@ repositories {
 dependencies {
 	// Spring Boot Starters
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
-	implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-client")
+    implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.retry:spring-retry")
     // Spring Cloud Dependencies
     implementation("org.springframework.cloud:spring-cloud-starter-config")
-    
-    implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webflux") 
+    implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-server")
 
     // Test dependencies
     testImplementation("org.springframework.boot:spring-boot-starter-test")

@@ -13,7 +13,7 @@ ARG JAR_FILE
 COPY build/libs/${JAR_FILE} app.jar
 
 # Expose the default Spring Boot port
-EXPOSE 8888
+EXPOSE 8080
 
 # Define the command to run the application
 ENTRYPOINT ["java", "-jar", "app.jar"]

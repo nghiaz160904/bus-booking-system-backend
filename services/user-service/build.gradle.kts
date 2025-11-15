@@ -14,13 +14,15 @@ repositories {
 
 dependencies {
 	developmentOnly("org.springframework.boot:spring-boot-devtools")
-    
+    implementation("org.springframework.cloud:spring-cloud-starter-config")
+    implementation("org.springframework.retry:spring-retry")
 	implementation("org.springframework.boot:spring-boot-starter")
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
     implementation("org.springframework.boot:spring-boot-starter-web") // For Spring Web (Controllers, REST)
     implementation("org.springframework.boot:spring-boot-starter-data-jpa") // For JPA (Entities, Repositories)
     implementation("org.springframework.boot:spring-boot-starter-validation") // For @Valid validation on DTOs
     implementation("org.springframework.boot:spring-boot-starter-security") // For Password Hashing (BCrypt)
+    implementation("org.springframework.cloud:spring-cloud-starter-netflix-eureka-client")
     runtimeOnly("org.postgresql:postgresql") // PostgreSQL Driver
     compileOnly("org.projectlombok:lombok") // (Optional) Lombok for less boilerplate code (getters/setters)
     annotationProcessor("org.projectlombok:lombok")

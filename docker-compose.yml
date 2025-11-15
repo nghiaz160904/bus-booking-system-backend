@@ -1,60 +1,77 @@
 networks:
-  # Define a common overlay network for all services
+  # 'docker-compose up' will create this as a 'bridge' network
   booking-network:
-    driver: overlay
 
 services:
   # --- 1. Configuration Server ---
-  # Provides externalized configuration to other services
   config-server:
     hostname: config-server
+    # 'build' tells docker-compose to build this image
+    build:
+      context: ./config-server
+      args:
+        # This path is from your Dockerfile
+        JAR_FILE: config-server-0.0.1-SNAPSHOT.jar
     image: com.booking/config-server:0.0.1-SNAPSHOT
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: none
-    volumes:
-      - C:/Users/thienanle04/.ssh/vexesieure_config_server_repo_rsa:/root/.ssh/id_rsa_config:ro 
+    ports:
+      - "8888:8888"
+    environment:
+      # This reads the PAT from your .env file
+      - GITHUB_PAT=${GITHUB_PAT}
     networks:
       - booking-network
 
-  # --- 2. User Service ---
-  user-service:
-    hostname: user-service
-    image: com.booking/user-service:0.0.1-SNAPSHOT
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: none
-    environment:
-      - SPRING_DATASOURCE_URL=${POSTGRES_URL}
-      - SPRING_DATASOURCE_USERNAME=${POSTGRES_USERNAME}
-      - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
-      - PORT=${PORT}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - SPRING_CLOUD_CONFIG_URI=${CONFIG_SERVER_URL}
+  service-registry:
+    hostname: service-registry
+    build:
+      context: ./service-registry
+      args:
+        JAR_FILE: service-registry-0.0.1-SNAPSHOT.jar
+    image: com.booking/service-registry:0.0.1-SNAPSHOT
+    ports:
+      - "8081:8081"
+      # Add all other required env variables from your .env file
     depends_on:
       - config-server
     networks:
       - booking-network
 
-  # --- 3. API Gateway ---
+  # --- 3. User Service ---
+  user-service:
+    hostname: user-service
+    build:
+      context: ./services/user-service
+      args:
+        JAR_FILE: user-service-0.0.1-SNAPSHOT.jar
+    image: com.booking/user-service:0.0.1-SNAPSHOT
+    ports:
+      - "8082:8082"
+      # Add all other required env variables from your .env file
+    depends_on:
+      - config-server 
+      - service-registry
+    networks:
+      - booking-network
+
+  # --- 4. API Gateway ---
   api-gateway:
     hostname: api-gateway
+    build:
+      context: ./api-gateway
+      args:
+        JAR_FILE: api-gateway-0.0.1-SNAPSHOT.jar
     image: com.booking/api-gateway:0.0.1-SNAPSHOT
     ports:
-      - "80:8080" # Map host port 80 to container's 8080
-    deploy:
-      replicas: 1
-      restart_policy:
-        condition: none
-    environment:
-      # Point to the Config Server
-      - SPRING_CLOUD_CONFIG_URI=${CONFIG_SERVER_URL}
-    # The API Gateway must be configured (via config-server) to route requests to the
-    # service name 'user-service' on port 8080.
+      - "8080:8080"
     depends_on:
       - config-server
       - user-service 
+      - service-registry
+    environment:
+      # This is the fast way to set debug logging.
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_GATEWAY=DEBUG
+      - LOGGING_LEVEL_REACTOR_NETTY_HTTP_CLIENT=DEBUG
+      # This flag enables the ability to change logging levels at runtime (safe to include)
+      - SPRING_APPLICATION_ADMIN_ENABLED=true
     networks:
       - booking-network

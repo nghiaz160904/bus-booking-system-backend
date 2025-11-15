@@ -51,7 +51,7 @@ public class SecurityConfig {
             // This is the new part
             .authorizeHttpRequests(authz -> authz
                 // Make our register and login endpoints public
-                .requestMatchers("/user/register", "/user/login").permitAll()
+                .requestMatchers("/register", "/login").permitAll()
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )

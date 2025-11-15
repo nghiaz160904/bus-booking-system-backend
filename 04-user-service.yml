@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+      - name: user-service
+        image: com.booking/user-service:0.0.1-SNAPSHOT
+        ports:
+        - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: app-configmap # Loads SPRING_CLOUD_CONFIG_URI
+        - secretRef:
+            name: app-secrets # Loads DB and JWT variables
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service # This name lets the gateway find it
+spec:
+  selector:
+    app: user-service
+  ports:
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
