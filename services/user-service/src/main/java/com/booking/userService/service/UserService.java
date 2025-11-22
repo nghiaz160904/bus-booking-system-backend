@@ -4,10 +4,15 @@ import com.booking.userService.model.User;
 import com.booking.userService.repository.UserRepository;
 import com.booking.userService.dto.RegisterRequest;
 import com.booking.userService.exception.EmailAlreadyExistsException;
+import com.booking.userService.model.Role;
+import com.booking.userService.dto.UserResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import java.util.Optional;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class UserService {
@@ -41,6 +46,7 @@ public class UserService {
         User newUser = User.builder()
                 .email(request.getEmail())
                 .password(hashedPassword)
+                .role(Role.USER)
                 .build();
         
         // 4. Save to database
@@ -54,5 +60,32 @@ public class UserService {
     public UserDetails loadUserByUsername(String email) {
         // This is now correct and will no longer cause an error
         return userDetailsService.loadUserByUsername(email);
+    }
+
+    // --- Method to save the refresh token ---
+    public User saveUserRefreshToken(User user, String refreshToken) {
+        user.setRefreshToken(refreshToken);
+        return userRepository.save(user);
+    }
+
+    // --- Method to find user by refresh token ---
+    public Optional<User> findByRefreshToken(String refreshToken) {
+        return userRepository.findByRefreshToken(refreshToken);
+    }
+
+    /**
+     * Fetches all users and converts them to a safe DTO.
+     * @return A list of UserResponse objects.
+     */
+    public List<UserResponse> getAllUsers() {
+        return userRepository.findAll()
+                .stream()
+                .map(user -> new UserResponse(
+                        user.getId(),
+                        user.getEmail(),
+                        user.getRole(),
+                        user.getCreatedAt()
+                ))
+                .collect(Collectors.toList());
     }
 }

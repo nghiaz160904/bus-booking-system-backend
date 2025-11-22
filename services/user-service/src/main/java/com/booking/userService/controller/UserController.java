@@ -1,21 +1,24 @@
 package com.booking.userService.controller;
 
 import com.booking.userService.dto.LoginRequest;
-import com.booking.userService.dto.LoginResponse;
 import com.booking.userService.dto.RegisterRequest;
+import com.booking.userService.dto.UserResponse; 
 import com.booking.userService.service.JwtService;
 import com.booking.userService.service.UserService;
 import com.booking.userService.model.User;
+import jakarta.servlet.http.Cookie; 
+import jakarta.servlet.http.HttpServletResponse; 
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.annotation.AuthenticationPrincipal; 
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/")
@@ -23,7 +26,15 @@ public class UserController {
 
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
-    private final JwtService jwtService; 
+    private final JwtService jwtService;
+
+    @Value("${app.cookie.secure}")
+    private boolean cookieSecure;
+
+    // --- Access token validity (e.g., 1 hour) ---
+    private final long ACCESS_TOKEN_VALIDITY_SECONDS = 3600; 
+    // --- Refresh token validity (e.g., 7 days) ---
+    private final long REFRESH_TOKEN_VALIDITY_SECONDS = 604800;
 
     @Autowired
     public UserController(UserService userService, AuthenticationManager authenticationManager, JwtService jwtService) {
@@ -34,15 +45,15 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
-        // @Valid triggers the validation in the RegisterRequest DTO
         userService.registerUser(request);
-
         return ResponseEntity.status(HttpStatus.CREATED).body("{ \"message\": \"User registered successfully\"}");
     }
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        // 1. This will check if the email and password are correct
+    public ResponseEntity<UserResponse> login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletResponse response // Inject response
+    ) {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(
                         request.getEmail(),
@@ -50,11 +61,103 @@ public class UserController {
                 )
         );
 
-        // 2. If correct, find the user and generate a token
-        var user = (User) userService.loadUserByUsername(request.getEmail()); // We know this is our User object
-        String token = jwtService.generateToken(user);
+        var user = (User) userService.loadUserByUsername(request.getEmail());
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = jwtService.generateRefreshToken(user);
 
-        // 3. Return the token
-        return ResponseEntity.ok(new LoginResponse(token));
+        // Save refresh token to DB
+        userService.saveUserRefreshToken(user, refreshToken);
+
+        // --- Set cookies ---
+        setCookie(response, "accessToken", accessToken, ACCESS_TOKEN_VALIDITY_SECONDS);
+        setSecureHttpOnlyCookie(response, "refreshToken", refreshToken, REFRESH_TOKEN_VALIDITY_SECONDS);
+
+        // Return user profile (like getMe)
+        return ResponseEntity.ok(new UserResponse(
+                user.getId(),
+                user.getEmail(),
+                user.getRole(),
+                user.getCreatedAt()
+        ));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<UserResponse> refreshToken(
+            @CookieValue(name = "refreshToken") String requestRefreshToken, // Read from cookie
+            HttpServletResponse response // Inject response
+    ) {
+        return userService.findByRefreshToken(requestRefreshToken)
+                .filter(user -> jwtService.isTokenValid(requestRefreshToken, user))
+                .map(user -> {
+                    String newAccessToken = jwtService.generateAccessToken(user);
+                    String newRefreshToken = jwtService.generateRefreshToken(user);
+
+                    userService.saveUserRefreshToken(user, newRefreshToken);
+                    
+                    setCookie(response, "accessToken", newAccessToken, ACCESS_TOKEN_VALIDITY_SECONDS);
+                    setCookie(response, "refreshToken", newRefreshToken, REFRESH_TOKEN_VALIDITY_SECONDS);
+
+                    return ResponseEntity.ok(new UserResponse(
+                            user.getId(),
+                            user.getEmail(),
+                            user.getRole(),
+                            user.getCreatedAt()
+                    ));
+                })
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<String> logout(HttpServletResponse response) {
+        // --- Clear cookies ---
+        clearCookie(response, "accessToken");
+        clearCookie(response, "refreshToken");
+        // We could also clear the token from the DB, but clearing the cookie is sufficient
+        return ResponseEntity.ok("{ \"message\": \"Logged out successfully\"}");
+    }
+    
+    @GetMapping("/me")
+    public ResponseEntity<UserResponse> getMyProfile(
+            @AuthenticationPrincipal User currentUser
+    ) {
+        UserResponse userResponse = new UserResponse(
+                currentUser.getId(),
+                currentUser.getEmail(),
+                currentUser.getRole(),
+                currentUser.getCreatedAt()
+        );
+        return ResponseEntity.ok(userResponse);
+    }
+
+    // --- Helper methods ---
+
+    private void setCookie(HttpServletResponse response, String name, String value, long maxAge) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        cookie.setPath("/");
+        cookie.setMaxAge((int) maxAge);
+        response.addCookie(cookie);
+    }
+
+    private void clearCookie(HttpServletResponse response, String name) {
+        Cookie cookie = new Cookie(name, null);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        cookie.setPath("/");
+        cookie.setMaxAge(0); // Expire the cookie
+        response.addCookie(cookie);
+    }
+
+    private void setSecureHttpOnlyCookie(HttpServletResponse response, String name, String value, long maxAgeInSeconds) {
+        ResponseCookie cookie = ResponseCookie.from(name, value)
+                .httpOnly(true)
+                .secure(true)
+                .path("/")
+                .maxAge(maxAgeInSeconds)
+                .sameSite("Lax")
+                .build();
+
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 }

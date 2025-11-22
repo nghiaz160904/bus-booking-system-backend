@@ -17,7 +17,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-
 import com.booking.userService.service.UserDetailsServiceImpl;
 
 import java.util.List;
@@ -48,10 +47,13 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for stateless API
             
-            // This is the new part
             .authorizeHttpRequests(authz -> authz
                 // Make our register and login endpoints public
-                .requestMatchers("/register", "/login").permitAll()
+                .requestMatchers("/register", "/login", "/refresh").permitAll()
+                // Only users with the "ADMIN" authority can access /admin/**
+                .requestMatchers("/admin/**").hasAuthority("ADMIN")
+                // Both ADMIN and USER can access /api/**
+                .requestMatchers("/api/**").hasAnyAuthority("USER", "ADMIN")
                 // All other endpoints require authentication
                 .anyRequest().authenticated()
             )

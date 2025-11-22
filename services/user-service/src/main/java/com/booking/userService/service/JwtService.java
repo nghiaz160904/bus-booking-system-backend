@@ -1,5 +1,6 @@
 package com.booking.userService.service;
 
+import com.booking.userService.model.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -20,17 +21,35 @@ public class JwtService {
     @Value("${jwt.secret-key}")
     private String SECRET_KEY;
 
-    // Generates a token
-    public String generateToken(UserDetails userDetails) {
-        return generateToken(new HashMap<>(), userDetails);
+    private static final long ACCESS_TOKEN_VALIDITY = 1000 * 60 * 60; // 1 hour
+    private static final long REFRESH_TOKEN_VALIDITY = 1000 * 60 * 60 * 24 * 7; // 7 days
+
+    // Generates an Access token
+    public String generateAccessToken(UserDetails userDetails) {
+        // --- Add roles to the access token ---
+        Map<String, Object> extraClaims = new HashMap<>();
+        if (userDetails instanceof User) {
+             extraClaims.put("role", ((User) userDetails).getRole().name());
+        }
+        // --- END NEW ---
+        
+        return Jwts.builder()
+                .claims(extraClaims) // Use the new claims
+                .subject(userDetails.getUsername())
+                .issuedAt(new Date(System.currentTimeMillis()))
+                // --- MODIFIED: Use short expiry ---
+                .expiration(new Date(System.currentTimeMillis() + ACCESS_TOKEN_VALIDITY))
+                .signWith(getSignInKey(), Jwts.SIG.HS256)
+                .compact();
     }
 
-    public String generateToken(Map<String, Object> extraClaims, UserDetails userDetails) {
+    // --- Method to generate a refresh token ---
+    public String generateRefreshToken(UserDetails userDetails) {
         return Jwts.builder()
-                .claims(extraClaims)
-                .subject(userDetails.getUsername()) // The "subject" is the user's email
+                .subject(userDetails.getUsername()) // Only needs the subject
                 .issuedAt(new Date(System.currentTimeMillis()))
-                .expiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24)) // 24-hour validity
+                // --- MODIFIED: Use long expiry ---
+                .expiration(new Date(System.currentTimeMillis() + REFRESH_TOKEN_VALIDITY))
                 .signWith(getSignInKey(), Jwts.SIG.HS256)
                 .compact();
     }
@@ -41,7 +60,7 @@ public class JwtService {
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
     }
 
-    private boolean isTokenExpired(String token) {
+    public boolean isTokenExpired(String token) {
         return extractExpiration(token).before(new Date());
     }
 

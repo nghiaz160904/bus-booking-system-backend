@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.hibernate.annotations.CreationTimestamp;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
 import java.util.Collection;
 import java.util.Date;
@@ -35,10 +36,19 @@ public class User implements UserDetails {
     @Column(updatable = false, nullable = false)
     private Date createdAt;
 
+    // --- Role field ---
+    @Enumerated(EnumType.STRING) // Stores the enum as a string ("USER", "ADMIN")
+    @Column(nullable = false)
+    private Role role;
+
+    // --- Refresh Token field ---
+    @Column(length = 512) // Make it long enough for a JWT
+    private String refreshToken;
+
     // --- UserDetails Methods ---
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(); // No roles for now
+        return List.of(new SimpleGrantedAuthority(role.name()));
     }
 
     @Override

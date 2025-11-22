@@ -3,6 +3,20 @@ networks:
   booking-network:
 
 services:
+  user-service-db:
+    image: postgres:17-alpine
+    container_name: user-service_db
+    ports:
+      - "5431:5432"
+    environment:
+      - POSTGRES_USER=user-service
+      - POSTGRES_PASSWORD=user-service-db-password
+      - POSTGRES_DB=vexesieure_user-service_db
+    volumes:
+      - user-service-db:/var/lib/postgresql/data
+    networks:
+      - booking-network
+      
   # --- 1. Configuration Server ---
   config-server:
     hostname: config-server
@@ -50,6 +64,7 @@ services:
     depends_on:
       - config-server 
       - service-registry
+      - user-service-db
     networks:
       - booking-network
 
@@ -75,3 +90,6 @@ services:
       - SPRING_APPLICATION_ADMIN_ENABLED=true
     networks:
       - booking-network
+
+volumes:
+  user-service-db:
