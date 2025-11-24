@@ -1,7 +1,5 @@
 package com.booking.userService.config;
 
-import com.booking.userService.config.OAuth2LoginSuccessHandler;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -15,19 +13,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import com.booking.userService.service.UserDetailsServiceImpl;
-
-import java.util.List;
 
 @Configuration
 public class SecurityConfig {
-
-    // 1. Inject the property from your .properties file
-    @Value("${cors.allowed-origin-patterns}")
-    private String[] allowedOriginPatterns;
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
@@ -51,9 +40,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(AbstractHttpConfigurer::disable) // Disable CSRF for stateless API
-            
+            .logout(AbstractHttpConfigurer::disable) // Disable default logout (Let UserController handle it)
             .authorizeHttpRequests(authz -> authz
                 // Make our register and login endpoints public
                 // Allow OAuth2 endpoints
@@ -90,18 +78,5 @@ public class SecurityConfig {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider(userDetailsService); 
         authProvider.setPasswordEncoder(passwordEncoder()); // Tell it how to hash passwords
         return authProvider;
-    }
-
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of(allowedOriginPatterns)); 
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
-        
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration); 
-        return source;
     }
 }
