@@ -55,7 +55,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
         // 4. Create Redirect URL with Tokens (or set cookies here)
         // We will send tokens via query params to a specific frontend route which will save them
-        String targetUrl = UriComponentsBuilder.fromUriString(frontendUrl + "/oauth2/callback")
+        String targetUrl = UriComponentsBuilder.fromUriString(frontendUrl + "/bus-booking-system-frontend/oauth2/callback")
                 .queryParam("accessToken", accessToken)
                 .queryParam("refreshToken", refreshToken)
                 .build().toUriString();
