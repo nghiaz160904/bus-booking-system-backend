@@ -62,6 +62,8 @@ services:
     depends_on:
       config-server:
         condition: service_healthy
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
     networks:
       - booking-network
 
@@ -87,6 +89,8 @@ services:
         condition: service_healthy
       user-service-db:
         condition: service_healthy
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
     networks:
       - booking-network
 
@@ -118,6 +122,7 @@ services:
       - LOGGING_LEVEL_REACTOR_NETTY_HTTP_CLIENT=DEBUG
       # This flag enables the ability to change logging levels at runtime (safe to include)
       - SPRING_APPLICATION_ADMIN_ENABLED=true
+      - SPRING_PROFILES_ACTIVE=docker
     networks:
       - booking-network
 

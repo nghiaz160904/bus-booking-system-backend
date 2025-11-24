@@ -1,5 +1,6 @@
 package com.booking.userService.config;
 
+import com.booking.userService.config.OAuth2LoginSuccessHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -30,10 +31,16 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsServiceImpl userDetailsService;
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
-    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, UserDetailsServiceImpl userDetailsService) {
+    public SecurityConfig(
+            JwtAuthenticationFilter jwtAuthFilter,
+            UserDetailsServiceImpl userDetailsService,
+            OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler
+    ) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.userDetailsService = userDetailsService;
+        this.oAuth2LoginSuccessHandler = oAuth2LoginSuccessHandler;
     }
 
     @Bean
@@ -49,7 +56,8 @@ public class SecurityConfig {
             
             .authorizeHttpRequests(authz -> authz
                 // Make our register and login endpoints public
-                .requestMatchers("/register", "/login", "/refresh").permitAll()
+                // Allow OAuth2 endpoints
+                .requestMatchers("/register", "/login", "/refresh", "/login/oauth2/**", "/oauth2/**").permitAll()
                 // Only users with the "ADMIN" authority can access /admin/**
                 .requestMatchers("/admin/**").hasAuthority("ADMIN")
                 // Both ADMIN and USER can access /api/**
@@ -62,8 +70,11 @@ public class SecurityConfig {
             // Tell Spring Security which auth provider to use
             .authenticationProvider(authenticationProvider())
             // Add our JWT filter *before* the default username/password filter
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
-        
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            // --- ADD OAUTH2 LOGIN CONFIGURATION ---
+            .oauth2Login(oauth2 -> oauth2
+                .successHandler(oAuth2LoginSuccessHandler)
+            );
         return http.build();
     }
 
