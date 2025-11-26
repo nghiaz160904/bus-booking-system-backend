@@ -31,9 +31,9 @@ public class UserController {
     @Value("${app.cookie.secure}")
     private boolean cookieSecure;
 
-    // --- Access token validity (e.g., 1 hour) ---
-    private final long ACCESS_TOKEN_VALIDITY_SECONDS = 3600; 
-    // --- Refresh token validity (e.g., 7 days) ---
+    // --- Access token validity (15 minutes) ---
+    private final long ACCESS_TOKEN_VALIDITY_SECONDS = 900; 
+    // --- Refresh token validity (7 days) ---
     private final long REFRESH_TOKEN_VALIDITY_SECONDS = 604800;
 
     @Autowired
@@ -108,7 +108,15 @@ public class UserController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(HttpServletResponse response) {
+    public ResponseEntity<String> logout(
+        HttpServletResponse response,
+        @CookieValue(name = "refreshToken", required = false) String refreshToken
+    ) {
+        // --- Delete token from DB if it exists ---
+        if (refreshToken != null && !refreshToken.isEmpty()) {
+            userService.deleteRefreshToken(refreshToken);
+        }
+
         // --- Clear cookies ---
         clearCookie(response, "accessToken");
         clearCookie(response, "refreshToken");

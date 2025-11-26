@@ -73,6 +73,18 @@ public class UserService {
         return userRepository.findByRefreshToken(refreshToken);
     }
 
+    public void deleteRefreshToken(String token) {
+        // 1. Find the user who owns this token
+        Optional<User> userOptional = userRepository.findByRefreshToken(token);
+        
+        // 2. If user exists, set their token to null (Revoke it)
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            user.setRefreshToken(null); // Clear the token
+            userRepository.save(user);  // Update the DB
+        }
+    }
+
     /**
      * Fetches all users and converts them to a safe DTO.
      * @return A list of UserResponse objects.
