@@ -91,3 +91,81 @@ We chose this hybrid approach (Stateless Access Token + Stateful Refresh Token) 
 | **HttpOnly Cookies** | The Refresh Token is strictly stored in an `HttpOnly`, `Secure` cookie. | **Why:** This prevents Cross-Site Scripting (XSS) attacks. JavaScript cannot read this cookie, making it significantly harder for attackers to steal the user's session. |
 | **Database Storage** | We store the Refresh Token status in the database. | **Why:** This allows for **Token Revocation**. If a user's account is compromised or they click "Log Out on all devices," we can simply delete/invalidate the token in the DB, instantly cutting off access. `<br><br>` **Trade-off:** It adds a database look-up overhead during the token refresh process, but increases security control. |
 | **JWT for Access** | Access Tokens are stateless JWTs. | **Why:** Microservices (User Service, Booking Service) can validate the token signature independently without needing to query a central database for every single API request, reducing latency. |
+
+### 4. Session Flow Explanation
+
+#### 1. The Login Flow (Initialization)
+
+This happens when the user first enters their credentials.
+
+**1. Request:** The Client sends `username` and `password` to the Auth Service
+
+**2. Validation:** The Service validates credentials against the Database
+
+**3. Token Creation:**
+
+* Access Token (AT): Generated with User ID and Roles (e.g., `ROLE_USER`).
+* Refresh Token (RT): A random secure string is generated.
+
+**4. Persistence (Crucial Step):** The Service hashes the Refresh Token and stores it in the Database linked to that user
+
+**5. Response:**
+
+* The Access Token is sent in the JSON Response body (so the Javascript client can put it in memory).
+* The Refresh Token is sent in a `Set-Cookie` header with flags `HttpOnly; Secure; SameSite`.
+
+#### 2. The Authenticated Request Flow (Happy Path)
+
+This is the standard flow for the first 15 minutes (while the Access Token is valid).
+
+**1. Request:** The User wants to "Book a Ticket." The Client attaches the Access Token to the `Authorization: Bearer <token>` header
+
+**2. Gateway Interception:** The API Gateway intercepts the request
+
+**3. Stateless Verification:**
+
+* The Gateway validates the JWT signature (using the public key or shared secret).
+* It checks the `exp` (expiration) claim.
+* RBAC Check: It checks if the payload contains `ROLE_USER`.
+
+**4. Forwarding:** Since the token is valid, the Gateway forwards the request to the **Booking Microservice**.
+
+**5. Response:** The Microservice processes the booking and returns data.
+
+* Note: The Database is **not** queried for authentication here, ensuring high performance.
+
+#### 3. The Refresh Flow (Silent Re-Auth)
+
+This happens automatically when the Access Token expires (after 15 minutes).
+
+**1. Failed Request:** The Client sends a request with an expired Access Token.
+
+**2. Rejection:** The Gateway detects the expiration and returns `401 Unauthorized`.
+
+**3. Refresh Trigger:** The Client logic detects the `401` and calls the `/refresh` endpoint.
+
+**4. Cookie Transmission:** The Browser automatically includes the **HttpOnly Cookie** (containing the Refresh Token) in this request. The Client JavaScript cannot touch this.
+
+**5. Stateful Verification:**
+
+* The Auth Service receives the cookie.
+* It hashes the Refresh Token and looks it up in the **Database**.
+
+**6. Revocation Check:**
+
+* **If found:** The session is valid. The Service generates a **New Access Token**.
+* **If NOT found (or revoked):** The Service rejects the request (forcing the user to log in again).
+
+**7. Response:** The New Access Token is sent to the Client. The user continues their session uninterrupted.
+
+#### 4. The Logout / Revocation Flow
+
+This creates the security benefit of the "Database Storage" decision.
+
+**1. Request:** User clicks "Log Out."
+
+**2. DB Cleanup:** The Service deletes the Refresh Token record from the Database.
+
+**3. Cookie Cleanup:** The Service sends a response to clear/expire the HttpOnly cookie.
+
+**4. Immediate Effect:** Even if an attacker managed to steal the Refresh Token cookie earlier, it is now useless because the **database lookup** in Step 3 (Refresh Flow) will fail.

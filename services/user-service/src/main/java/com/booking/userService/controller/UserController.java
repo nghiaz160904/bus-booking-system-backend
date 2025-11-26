@@ -2,6 +2,7 @@ package com.booking.userService.controller;
 
 import com.booking.userService.dto.LoginRequest;
 import com.booking.userService.dto.RegisterRequest;
+import com.booking.userService.dto.LoginResponse;
 import com.booking.userService.dto.UserResponse; 
 import com.booking.userService.service.JwtService;
 import com.booking.userService.service.UserService;
@@ -50,7 +51,7 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<UserResponse> login(
+    public ResponseEntity<LoginResponse> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletResponse response // Inject response
     ) {
@@ -69,20 +70,21 @@ public class UserController {
         userService.saveUserRefreshToken(user, refreshToken);
 
         // --- Set cookies ---
-        setCookie(response, "accessToken", accessToken, ACCESS_TOKEN_VALIDITY_SECONDS);
         setSecureHttpOnlyCookie(response, "refreshToken", refreshToken, REFRESH_TOKEN_VALIDITY_SECONDS);
 
         // Return user profile (like getMe)
-        return ResponseEntity.ok(new UserResponse(
+        UserResponse userResp = new UserResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getRole(),
                 user.getCreatedAt()
-        ));
+        );
+
+        return ResponseEntity.ok(new LoginResponse(accessToken, userResp));
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<UserResponse> refreshToken(
+    public ResponseEntity<LoginResponse> refreshToken(
             @CookieValue(name = "refreshToken") String requestRefreshToken, // Read from cookie
             HttpServletResponse response // Inject response
     ) {
@@ -93,16 +95,16 @@ public class UserController {
                     String newRefreshToken = jwtService.generateRefreshToken(user);
 
                     userService.saveUserRefreshToken(user, newRefreshToken);
-                    
-                    setCookie(response, "accessToken", newAccessToken, ACCESS_TOKEN_VALIDITY_SECONDS);
-                    setCookie(response, "refreshToken", newRefreshToken, REFRESH_TOKEN_VALIDITY_SECONDS);
+                    setSecureHttpOnlyCookie(response, "refreshToken", newRefreshToken, REFRESH_TOKEN_VALIDITY_SECONDS);
 
-                    return ResponseEntity.ok(new UserResponse(
+                    UserResponse userResp = new UserResponse(
                             user.getId(),
                             user.getEmail(),
                             user.getRole(),
                             user.getCreatedAt()
-                    ));
+                    );
+
+                    return ResponseEntity.ok(new LoginResponse(newAccessToken, userResp));
                 })
                 .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(null));
     }
@@ -118,7 +120,6 @@ public class UserController {
         }
 
         // --- Clear cookies ---
-        clearCookie(response, "accessToken");
         clearCookie(response, "refreshToken");
         // We could also clear the token from the DB, but clearing the cookie is sufficient
         return ResponseEntity.ok("{ \"message\": \"Logged out successfully\"}");
@@ -139,31 +140,25 @@ public class UserController {
 
     // --- Helper methods ---
 
-    private void setCookie(HttpServletResponse response, String name, String value, long maxAge) {
-        Cookie cookie = new Cookie(name, value);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(cookieSecure);
-        cookie.setPath("/");
-        cookie.setMaxAge((int) maxAge);
-        response.addCookie(cookie);
-    }
-
     private void clearCookie(HttpServletResponse response, String name) {
-        Cookie cookie = new Cookie(name, null);
-        cookie.setHttpOnly(true);
-        cookie.setSecure(cookieSecure);
-        cookie.setPath("/");
-        cookie.setMaxAge(0); // Expire the cookie
-        response.addCookie(cookie);
+        ResponseCookie cookie = ResponseCookie.from(name, "")
+                .httpOnly(true)
+                .secure(cookieSecure)
+                .path("/")
+                .maxAge(0) // Expire immediately
+                .sameSite("Lax")
+                .build();
+
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
     private void setSecureHttpOnlyCookie(HttpServletResponse response, String name, String value, long maxAgeInSeconds) {
         ResponseCookie cookie = ResponseCookie.from(name, value)
                 .httpOnly(true)
-                .secure(true)
+                .secure(cookieSecure) // Configurable (true for HTTPS, false for localhost dev)
                 .path("/")
                 .maxAge(maxAgeInSeconds)
-                .sameSite("Lax")
+                .sameSite("Lax") // Protects against CSRF while allowing normal navigation
                 .build();
 
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());

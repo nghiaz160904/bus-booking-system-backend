@@ -47,7 +47,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 // Make our register and login endpoints public
                 // Allow OAuth2 endpoints
-                .requestMatchers("/register", "/login", "/refresh", "/login/oauth2/**", "/oauth2/**").permitAll()
+                .requestMatchers("/register", "/login", "/refresh", "logout", "/login/oauth2/**", "/oauth2/**").permitAll()
                 // Only users with the "ADMIN" authority can access /admin/**
                 .requestMatchers("/admin/**").hasAuthority("ADMIN")
                 // Both ADMIN and USER can access /api/**
