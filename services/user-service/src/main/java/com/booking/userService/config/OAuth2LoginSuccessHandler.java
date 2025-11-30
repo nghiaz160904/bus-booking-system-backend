@@ -4,7 +4,6 @@ import com.booking.userService.model.Role;
 import com.booking.userService.model.User;
 import com.booking.userService.repository.UserRepository;
 import com.booking.userService.service.JwtService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +15,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.io.IOException;
-import java.util.Optional;
 import java.util.UUID;
 
 @Component

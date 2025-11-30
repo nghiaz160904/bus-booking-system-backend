@@ -20,16 +20,16 @@ import com.booking.userService.service.UserDetailsServiceImpl;
 @Configuration
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthFilter;
+    private final GatewayHeaderAuthenticationFilter gatewayHeaderFilter;
     private final UserDetailsServiceImpl userDetailsService;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthFilter,
+            GatewayHeaderAuthenticationFilter gatewayHeaderFilter,
             UserDetailsServiceImpl userDetailsService,
             OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler
     ) {
-        this.jwtAuthFilter = jwtAuthFilter;
+        this.gatewayHeaderFilter = gatewayHeaderFilter;
         this.userDetailsService = userDetailsService;
         this.oAuth2LoginSuccessHandler = oAuth2LoginSuccessHandler;
     }
@@ -47,7 +47,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 // Make our register and login endpoints public
                 // Allow OAuth2 endpoints
-                .requestMatchers("/register", "/login", "/refresh", "logout", "/login/oauth2/**", "/oauth2/**").permitAll()
+                .requestMatchers(
+                    "/register", "/login", "/refresh", "/logout",
+                    "/login/oauth2/**", "/oauth2/**",
+                    "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 // Only users with the "ADMIN" authority can access /admin/**
                 .requestMatchers("/admin/**").hasAuthority("ADMIN")
                 // Both ADMIN and USER can access /api/**
@@ -63,7 +66,7 @@ public class SecurityConfig {
             // Tell Spring Security which auth provider to use
             .authenticationProvider(authenticationProvider())
             // Add our JWT filter *before* the default username/password filter
-            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(gatewayHeaderFilter, UsernamePasswordAuthenticationFilter.class)
             // --- ADD OAUTH2 LOGIN CONFIGURATION ---
             .oauth2Login(oauth2 -> oauth2
                 .successHandler(oAuth2LoginSuccessHandler)

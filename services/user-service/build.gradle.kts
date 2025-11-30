@@ -26,6 +26,7 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql") // PostgreSQL Driver
     compileOnly("org.projectlombok:lombok") // (Optional) Lombok for less boilerplate code (getters/setters)
     annotationProcessor("org.projectlombok:lombok")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0")
 
     // --- JWT Dependencies ---
     implementation("io.jsonwebtoken:jjwt-api:0.12.3")
@@ -41,4 +42,8 @@ dependencies {
     testImplementation("org.testcontainers:postgresql")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:postgresql")
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }

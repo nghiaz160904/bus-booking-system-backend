@@ -7,7 +7,6 @@ import com.booking.userService.dto.UserResponse;
 import com.booking.userService.service.JwtService;
 import com.booking.userService.service.UserService;
 import com.booking.userService.model.User;
-import jakarta.servlet.http.Cookie; 
 import jakarta.servlet.http.HttpServletResponse; 
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +17,8 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.annotation.AuthenticationPrincipal; 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -32,8 +32,6 @@ public class UserController {
     @Value("${app.cookie.secure}")
     private boolean cookieSecure;
 
-    // --- Access token validity (15 minutes) ---
-    private final long ACCESS_TOKEN_VALIDITY_SECONDS = 900; 
     // --- Refresh token validity (7 days) ---
     private final long REFRESH_TOKEN_VALIDITY_SECONDS = 604800;
 
@@ -127,13 +125,17 @@ public class UserController {
     
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getMyProfile(
-            @AuthenticationPrincipal User currentUser
+            @AuthenticationPrincipal UserDetails currentUserDetails 
     ) {
+        // The Gateway only gave us the Email and Role. 
+        // We must fetch the full ID and CreatedAt from the DB for this specific request.
+        User user = (User) userService.loadUserByUsername(currentUserDetails.getUsername());
+
         UserResponse userResponse = new UserResponse(
-                currentUser.getId(),
-                currentUser.getEmail(),
-                currentUser.getRole(),
-                currentUser.getCreatedAt()
+                user.getId(),
+                user.getEmail(),
+                user.getRole(),
+                user.getCreatedAt()
         );
         return ResponseEntity.ok(userResponse);
     }
