@@ -25,7 +25,7 @@ services:
     image: postgres:17-alpine
     container_name: booking-service_db
     ports:
-      - "5433:5433"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U booking-service -d vexesieure_booking-service_db"]
       interval: 10s
