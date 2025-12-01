@@ -10,6 +10,7 @@ rootProject.name = "bus-booking-system-backend"
 include("common-library")
 include("config-server")
 include("services:user-service")
+include("services:booking-service")
 include("api-gateway")
 include("service-registry")
 

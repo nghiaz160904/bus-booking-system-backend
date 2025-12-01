@@ -21,7 +21,24 @@ services:
       - user-service-db:/var/lib/postgresql/data
     networks:
       - booking-network
-      
+  booking-service-db:
+    image: postgres:17-alpine
+    container_name: booking-service_db
+    ports:
+      - "5433:5433"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U booking-service -d vexesieure_booking-service_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    environment:
+      - POSTGRES_USER=booking-service
+      - POSTGRES_PASSWORD=booking-service-db-password
+      - POSTGRES_DB=vexesieure_booking-service_db
+    volumes:
+      - booking-service-db:/var/lib/postgresql/data
+    networks:
+      - booking-network
   # --- 1. Configuration Server ---
   config-server:
     hostname: config-server
@@ -94,6 +111,32 @@ services:
     networks:
       - booking-network
 
+  booking-service:
+    hostname: booking-service
+    build:
+      context: ./services/booking-service
+      args:
+        JAR_FILE: booking-service-0.0.1-SNAPSHOT.jar
+    image: com.booking/booking-service:0.0.1-SNAPSHOT
+    ports:
+      - "8083:8083"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/8083'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      config-server:
+        condition: service_healthy
+      service-registry:
+        condition: service_healthy
+      booking-service-db:
+        condition: service_healthy
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+    networks:
+      - booking-network
+    
   # --- 4. API Gateway ---
   api-gateway:
     hostname: api-gateway
@@ -128,3 +171,4 @@ services:
 
 volumes:
   user-service-db:
+  booking-service-db:
