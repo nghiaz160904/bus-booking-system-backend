@@ -28,6 +28,8 @@ public class TripSearchRequest {
     
     private BigDecimal minPrice;
     private BigDecimal maxPrice;
+
+    private String sort;
     
     private UUID operatorId;
 

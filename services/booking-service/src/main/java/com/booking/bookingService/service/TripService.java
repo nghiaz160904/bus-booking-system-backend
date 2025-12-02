@@ -6,6 +6,7 @@ import com.booking.bookingService.repository.*;
 import com.booking.bookingService.exception.ResourceNotFoundException;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -26,8 +27,30 @@ public class TripService {
     private final SeatStatusRepository seatStatusRepository;
 
     public Page<TripSearchResponse> searchTrips(TripSearchRequest request) {
-        // 1. Setup Pagination
-        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getLimit());
+        // 1. Setup Sorting & Pagination
+        Sort sort = Sort.by(Sort.Direction.ASC, "departureTime"); // Default: Sớm nhất trước
+
+        if (request.getSort() != null && !request.getSort().isEmpty()) {
+            switch (request.getSort()) {
+                case "earliest":
+                    sort = Sort.by(Sort.Direction.ASC, "departureTime");
+                    break;
+                case "latest":
+                    sort = Sort.by(Sort.Direction.DESC, "departureTime");
+                    break;
+                case "lowest_price":
+                    sort = Sort.by(Sort.Direction.ASC, "price");
+                    break;
+                case "highest_rating":
+                    // Lưu ý: Đảm bảo Entity Operator có trường "rating"
+                    sort = Sort.by(Sort.Direction.DESC, "operator.rating"); 
+                    break;
+                default:
+                    // Fallback về default nếu gửi sort linh tinh
+                    sort = Sort.by(Sort.Direction.ASC, "departureTime");
+            }
+        }
+        Pageable pageable = PageRequest.of(request.getPage() - 1, request.getLimit(), sort);
 
         Specification<Trip> spec = (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();

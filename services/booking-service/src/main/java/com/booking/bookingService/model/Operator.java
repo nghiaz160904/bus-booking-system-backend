@@ -15,5 +15,6 @@ public class Operator {
     private String name;
     private String contactEmail;
     private String contactPhone;
+    private Double rating;
     // ... other fields
 }
