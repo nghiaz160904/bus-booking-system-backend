@@ -157,8 +157,6 @@ services:
         condition: service_healthy
       service-registry:
         condition: service_healthy
-      user-service:
-        condition: service_healthy
     environment:
       # This is the fast way to set debug logging.
       - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_GATEWAY=DEBUG

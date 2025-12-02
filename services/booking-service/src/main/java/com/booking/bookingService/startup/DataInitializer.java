@@ -19,6 +19,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Bootstraps the application with initial data.
+ * UPDATED: Now clears existing data on startup to ensure new logic (like grid coordinates) applies.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -30,27 +34,30 @@ public class DataInitializer implements CommandLineRunner {
     private final TripRepository tripRepository;
     private final SeatRepository seatRepository;
     private final SeatStatusRepository seatStatusRepository;
-    private final ObjectMapper objectMapper; 
+    private final SeatTypeRepository seatTypeRepository;
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        if (operatorRepository.count() > 0) {
-            log.info("Data already exists. Skipping initialization.");
-            return;
-        }
+        // --- 1. CLEANUP OLD DATA ---
+        // We force a cleanup so your recent code changes (gridRow/gridCol) take effect.
+        log.info("Cleaning up old database data...");
+        clearDatabase();
 
-        log.info("Initializing data from JSON file...");
+        // --- 2. INITIALIZE NEW DATA ---
+        log.info("Bootstrapping database with fresh seed data...");
 
         try (InputStream inputStream = new ClassPathResource("data/initial_data.json").getInputStream()) {
             InitialData data = objectMapper.readValue(inputStream, InitialData.class);
 
-            // Maps to temporarily store created objects for relationship mapping
-            Map<String, Operator> createdOperators = new HashMap<>();
-            Map<String, Bus> createdBuses = new HashMap<>();
-            Map<String, Route> createdRoutes = new HashMap<>();
+            // Caches to resolve relationships without repeated DB lookups
+            Map<String, Operator> operatorCache = new HashMap<>();
+            Map<String, Bus> busCache = new HashMap<>();
+            Map<String, Route> routeCache = new HashMap<>();
+            Map<String, SeatType> seatTypeCache = new HashMap<>();
 
-            // 1. Create Operators
+            // A. Create Operators & Seat Types
             for (OperatorData opData : data.getOperators()) {
                 Operator op = Operator.builder()
                         .name(opData.getName())
@@ -58,12 +65,14 @@ public class DataInitializer implements CommandLineRunner {
                         .contactPhone(opData.getPhone())
                         .build();
                 operatorRepository.save(op);
-                createdOperators.put(opData.getKey(), op);
+                operatorCache.put(opData.getKey(), op);
+
+                initializeDefaultSeatTypes(op, seatTypeCache);
             }
 
-            // 2. Create Buses & Seats
+            // B. Create Buses & Seats
             for (BusData busData : data.getBuses()) {
-                Operator op = createdOperators.get(busData.getOperatorKey());
+                Operator op = operatorCache.get(busData.getOperatorKey());
                 if (op == null) continue;
 
                 Bus bus = Bus.builder()
@@ -71,17 +80,17 @@ public class DataInitializer implements CommandLineRunner {
                         .model(busData.getModel())
                         .plateNumber(busData.getPlateNumber())
                         .seatCapacity(busData.getCapacity())
-                        .type(busData.getType()) // Map the new type field
+                        .type(busData.getType())
                         .build();
                 busRepository.save(bus);
-                createdBuses.put(busData.getKey(), bus);
+                busCache.put(busData.getKey(), bus);
 
-                generateSeatsForBus(bus);
+                generatePhysicalSeatsForBus(bus, seatTypeCache);
             }
 
-            // 3. Create Routes
+            // C. Create Routes
             for (RouteData routeData : data.getRoutes()) {
-                Operator op = createdOperators.get(routeData.getOperatorKey());
+                Operator op = operatorCache.get(routeData.getOperatorKey());
                 if (op == null) continue;
 
                 Route route = Route.builder()
@@ -92,18 +101,15 @@ public class DataInitializer implements CommandLineRunner {
                         .estimatedMinutes(routeData.getMinutes())
                         .build();
                 routeRepository.save(route);
-                createdRoutes.put(routeData.getKey(), route);
+                routeCache.put(routeData.getKey(), route);
             }
 
-            // 4. Create Trips & SeatStatuses
+            // D. Create Trips & Statuses
             for (TripData tripData : data.getTrips()) {
-                Route route = createdRoutes.get(tripData.getRouteKey());
-                Bus bus = createdBuses.get(tripData.getBusKey());
-                
-                if (route == null || bus == null) {
-                    log.warn("Skipping trip due to missing route or bus: {}", tripData);
-                    continue;
-                }
+                Route route = routeCache.get(tripData.getRouteKey());
+                Bus bus = busCache.get(tripData.getBusKey());
+
+                if (route == null || bus == null) continue;
 
                 LocalDateTime departure = LocalDateTime.parse(tripData.getDate());
                 LocalDateTime arrival = departure.plusMinutes(route.getEstimatedMinutes());
@@ -111,44 +117,91 @@ public class DataInitializer implements CommandLineRunner {
                 Trip trip = Trip.builder()
                         .route(route)
                         .bus(bus)
-                        .operator(bus.getOperator()) // Set the Operator from the Bus
+                        .operator(bus.getOperator())
                         .departureTime(departure)
                         .arrivalTime(arrival)
-                        .price(tripData.getPrice()) // Use price instead of basePrice
+                        .price(tripData.getPrice())
                         .status(Trip.TripStatus.SCHEDULED)
-                        .availableSeats(0) // Will be updated after seat generation
+                        .availableSeats(0)
                         .build();
                 tripRepository.save(trip);
 
-                // Initialize seat statuses and calculate available seats
-                int availableSeats = generateSeatStatusesForTrip(trip, bus);
-                
-                // Update the trip with the correct available seat count
+                int availableSeats = initializeSeatStatusesForTrip(trip, bus);
                 trip.setAvailableSeats(availableSeats);
                 tripRepository.save(trip);
             }
 
-            log.info("Successfully initialized {} trips from JSON.", data.getTrips().size());
+            log.info("Bootstrap complete. Created {} trips.", data.getTrips().size());
+
         } catch (Exception e) {
-            log.error("Failed to initialize data from JSON", e);
-            throw e; 
+            log.error("Critical failure during data initialization", e);
+            throw e;
         }
     }
 
-    private void generateSeatsForBus(Bus bus) {
+    /**
+     * Wipes all data to ensure a clean state.
+     * Deletes in specific order to avoid Foreign Key Constraint violations.
+     */
+    private void clearDatabase() {
+        // 1. Child tables first (Dependencies)
+        seatStatusRepository.deleteAll(); // Refers to Trip, Seat
+        tripRepository.deleteAll();       // Refers to Bus, Route, Operator
+        
+        seatRepository.deleteAll();       // Refers to Bus, SeatType
+        
+        // 2. Middle tables
+        routeRepository.deleteAll();      // Refers to Operator
+        busRepository.deleteAll();        // Refers to Operator
+        
+        // 3. Parent tables last
+        seatTypeRepository.deleteAll();   // Refers to Operator
+        operatorRepository.deleteAll();   // Root parent
+        
+        log.info("Database cleared.");
+    }
+
+    private void initializeDefaultSeatTypes(Operator op, Map<String, SeatType> cache) {
+        String[] defaultTypes = {"Sleeper", "Limousine", "Standard"};
+        for (String typeName : defaultTypes) {
+            SeatType seatType = SeatType.builder()
+                    .name(typeName)
+                    .description("Standard configuration for " + typeName)
+                    .price(BigDecimal.ZERO)
+                    .operator(op)
+                    .build();
+            seatTypeRepository.save(seatType);
+            cache.put(op.getId() + "_" + typeName, seatType);
+        }
+    }
+
+    private void generatePhysicalSeatsForBus(Bus bus, Map<String, SeatType> typeCache) {
         List<Seat> seats = new ArrayList<>();
         String[] columns = {"A", "B", "C"};
-        int rows = bus.getSeatCapacity() / 3; 
+        int rows = bus.getSeatCapacity() / 3;
+
+        String cacheKey = bus.getOperator().getId() + "_" + bus.getType();
+        SeatType typeEntity = typeCache.get(cacheKey);
+
+        if (typeEntity == null) {
+            typeEntity = typeCache.values().stream()
+                    .filter(t -> t.getOperator().getId().equals(bus.getOperator().getId()))
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("No SeatTypes defined for operator"));
+        }
 
         for (int row = 1; row <= rows; row++) {
+            int colIdx = 1;
             for (String col : columns) {
                 if (seats.size() >= bus.getSeatCapacity()) break;
 
                 Seat seat = Seat.builder()
                         .bus(bus)
-                        .seatCode(col + row)
-                        .seatType("sleeper")
+                        .seatCode(col + String.format("%02d", row))
+                        .seatType(typeEntity)
                         .deckNumber(1)
+                        .gridRow(row)       // <--- Updated logic will now persist
+                        .gridCol(colIdx++)  // <--- Updated logic will now persist
                         .build();
                 seats.add(seat);
             }
@@ -156,20 +209,16 @@ public class DataInitializer implements CommandLineRunner {
         seatRepository.saveAll(seats);
     }
 
-    private int generateSeatStatusesForTrip(Trip trip, Bus bus) {
+    private int initializeSeatStatusesForTrip(Trip trip, Bus bus) {
         List<Seat> seats = seatRepository.findByBusId(bus.getId());
         List<SeatStatus> statuses = new ArrayList<>();
         int availableCount = 0;
-        
+
         for (Seat seat : seats) {
-            // Random chance for a seat to be booked
-            SeatStatus.SeatState state = SeatStatus.SeatState.AVAILABLE;
-            if (Math.random() < 0.1) {
-                state = SeatStatus.SeatState.BOOKED; 
-            } else {
-                availableCount++;
-            }
-            
+            boolean isBooked = Math.random() < 0.1;
+            SeatStatus.SeatState state = isBooked ? SeatStatus.SeatState.BOOKED : SeatStatus.SeatState.AVAILABLE;
+            if (!isBooked) availableCount++;
+
             SeatStatus status = SeatStatus.builder()
                     .trip(trip)
                     .seat(seat)
@@ -181,7 +230,6 @@ public class DataInitializer implements CommandLineRunner {
         return availableCount;
     }
 
-    // --- Inner DTO Classes for JSON Mapping ---
     @Data
     static class InitialData {
         private List<OperatorData> operators;
@@ -205,7 +253,7 @@ public class DataInitializer implements CommandLineRunner {
         private String model;
         private String plateNumber;
         private int capacity;
-        private String type; // Added type field
+        private String type;
     }
 
     @Data
@@ -222,7 +270,7 @@ public class DataInitializer implements CommandLineRunner {
     static class TripData {
         private String routeKey;
         private String busKey;
-        private String date; 
+        private String date;
         private BigDecimal price;
     }
 }

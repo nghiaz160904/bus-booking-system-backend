@@ -1,11 +1,15 @@
 package com.booking.bookingService.controller;
 
 import com.booking.bookingService.dto.SeatMapResponse;
+import com.booking.bookingService.dto.TripRequest;
 import com.booking.bookingService.dto.TripSearchResponse;
 import com.booking.bookingService.dto.TripSearchRequest;
 import com.booking.bookingService.service.TripService;
+
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +23,23 @@ import java.util.UUID;
 public class TripController {
 
     private final TripService tripService;
+
+    @PostMapping
+    public ResponseEntity<?> createTrip(@Valid @RequestBody TripRequest request) {
+        // Map to response DTO logic would be here, for now returning entity
+        return new ResponseEntity<>(tripService.createTrip(request), HttpStatus.CREATED);
+    }
+
+    @PutMapping("/{tripId}")
+    public ResponseEntity<?> updateTrip(@PathVariable UUID tripId, @Valid @RequestBody TripRequest request) {
+        return ResponseEntity.ok(tripService.updateTrip(tripId, request));
+    }
+
+    @DeleteMapping("/{tripId}")
+    public ResponseEntity<?> deleteTrip(@PathVariable UUID tripId) {
+        tripService.deleteTrip(tripId);
+        return ResponseEntity.noContent().build();
+    }
 
     @GetMapping("/search")
     public ResponseEntity<Map<String, Object>> searchTrips(

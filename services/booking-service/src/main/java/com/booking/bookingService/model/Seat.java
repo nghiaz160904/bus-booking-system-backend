@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 @Entity
 @Table(name = "seat")
 @Data @NoArgsConstructor @AllArgsConstructor @Builder
@@ -14,9 +16,15 @@ public class Seat {
 
     @ManyToOne
     @JoinColumn(name = "bus_id")
+    @JsonIgnore
     private Bus bus;
 
     private String seatCode; // e.g., A1, B2
-    private String seatType; // standard, sleeper
+    private int gridRow;    // Vertical position (1, 2, 3...)
+    private int gridCol;    // Horizontal position (1, 2, 3, 4, 5...)
     private int deckNumber; // 1 or 2
+
+    @ManyToOne
+    @JoinColumn(name = "seat_type_id")
+    private SeatType seatType;
 }

@@ -10,15 +10,22 @@ import java.util.UUID;
 @Builder
 public class SeatMapResponse {
     private UUID tripId;
+    private int totalDecks;     // Helpful for frontend
+    private int gridRows;       // Max rows (height)
+    private int gridColumns;    // Max cols (width)
     private List<SeatDto> seats;
 
     @Data @Builder
     public static class SeatDto {
         private String seatId;
         private String seatCode;
-        private String status; // available, locked, occupied
+        private String status;
         private BigDecimal price;
         private String type;
         private int deck;
+        
+        // Coordinates
+        private int row;
+        private int col;
     }
 }
