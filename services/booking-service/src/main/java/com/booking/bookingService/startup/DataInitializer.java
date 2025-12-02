@@ -11,6 +11,8 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,30 +39,36 @@ public class DataInitializer implements CommandLineRunner {
     private final SeatTypeRepository seatTypeRepository;
     private final ObjectMapper objectMapper;
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     @Override
     @Transactional
     public void run(String... args) throws Exception {
         // --- PHẦN MỚI: XÓA DỮ LIỆU CŨ (CLEAN UP) ---
         log.info("Cleaning up existing data to ensure a fresh start...");
         
-        // Phải xóa theo thứ tự: Bảng con (phụ thuộc) -> Bảng cha (gốc)
-        // 1. Xóa SeatStatus (phụ thuộc vào Trip và Seat)
-        seatStatusRepository.deleteAll();
-        
-        // 2. Xóa Trip (phụ thuộc vào Route và Bus)
-        tripRepository.deleteAll();
-        
-        // 3. Xóa Seat (phụ thuộc vào Bus)
-        seatRepository.deleteAll();
-        
-        // 4. Xóa Route (phụ thuộc vào Operator)
-        routeRepository.deleteAll();
-        
-        // 5. Xóa Bus (phụ thuộc vào Operator)
-        busRepository.deleteAll();
-        
-        // 6. Xóa Operator (Gốc - không phụ thuộc ai)
-        operatorRepository.deleteAll();
+        // Use native SQL to avoid entity loading issues
+        try {
+            entityManager.createNativeQuery("TRUNCATE TABLE seat_status CASCADE").executeUpdate();
+            entityManager.createNativeQuery("TRUNCATE TABLE trip CASCADE").executeUpdate();
+            entityManager.createNativeQuery("TRUNCATE TABLE seat CASCADE").executeUpdate();
+            entityManager.createNativeQuery("TRUNCATE TABLE route CASCADE").executeUpdate();
+            entityManager.createNativeQuery("TRUNCATE TABLE bus CASCADE").executeUpdate();
+            entityManager.createNativeQuery("TRUNCATE TABLE seat_type CASCADE").executeUpdate();
+            entityManager.createNativeQuery("TRUNCATE TABLE operator CASCADE").executeUpdate();
+            entityManager.flush();
+        } catch (Exception e) {
+            log.warn("Could not truncate tables (might be first run): {}", e.getMessage());
+            // If truncate fails, try delete (slower but works if schema doesn't exist yet)
+            entityManager.createNativeQuery("DELETE FROM seat_status").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM trip").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM seat").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM route").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM bus").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM seat_type").executeUpdate();
+            entityManager.createNativeQuery("DELETE FROM operator").executeUpdate();
+        }
 
         log.info("All existing data cleared. Initializing new data from JSON file...");
 
@@ -175,9 +183,14 @@ public class DataInitializer implements CommandLineRunner {
     private void generatePhysicalSeatsForBus(Bus bus, Map<String, SeatType> typeCache) {
         List<Seat> seats = new ArrayList<>();
         String[] columns = {"A", "B", "C"};
-        int rows = bus.getSeatCapacity() / 3;
+        int seatsPerRow = columns.length;
+        int rows = (bus.getSeatCapacity() + seatsPerRow - 1) / seatsPerRow; // ceil division
 
-        String cacheKey = bus.getOperator().getId() + "_" + bus.getType();
+        if (bus.getOperator() == null) {
+            throw new IllegalStateException("Bus operator is null for bus " + bus.getId());
+        }
+
+        String cacheKey = bus.getOperator().getId() + "_" + (bus.getType() != null ? bus.getType() : "Standard");
         SeatType typeEntity = typeCache.get(cacheKey);
 
         if (typeEntity == null) {
@@ -197,10 +210,11 @@ public class DataInitializer implements CommandLineRunner {
                         .seatCode(col + String.format("%02d", row))
                         .seatType(typeEntity)
                         .deckNumber(1)
-                        .gridRow(row)       // <--- Updated logic will now persist
-                        .gridCol(colIdx++)  // <--- Updated logic will now persist
+                        .gridRow(row)       // persist row index
+                        .gridCol(colIdx)    // persist column index
                         .build();
                 seats.add(seat);
+                colIdx++;
             }
         }
         seatRepository.saveAll(seats);
