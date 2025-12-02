@@ -35,10 +35,29 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        if (operatorRepository.count() > 0) {
-            log.info("Data already exists. Skipping initialization.");
-            return;
-        }
+        // --- PHẦN MỚI: XÓA DỮ LIỆU CŨ (CLEAN UP) ---
+        log.info("Cleaning up existing data to ensure a fresh start...");
+        
+        // Phải xóa theo thứ tự: Bảng con (phụ thuộc) -> Bảng cha (gốc)
+        // 1. Xóa SeatStatus (phụ thuộc vào Trip và Seat)
+        seatStatusRepository.deleteAll();
+        
+        // 2. Xóa Trip (phụ thuộc vào Route và Bus)
+        tripRepository.deleteAll();
+        
+        // 3. Xóa Seat (phụ thuộc vào Bus)
+        seatRepository.deleteAll();
+        
+        // 4. Xóa Route (phụ thuộc vào Operator)
+        routeRepository.deleteAll();
+        
+        // 5. Xóa Bus (phụ thuộc vào Operator)
+        busRepository.deleteAll();
+        
+        // 6. Xóa Operator (Gốc - không phụ thuộc ai)
+        operatorRepository.deleteAll();
+
+        log.info("All existing data cleared. Initializing new data from JSON file...");
 
         log.info("Initializing data from JSON file...");
 
