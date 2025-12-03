@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.NonNull;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -19,9 +20,11 @@ import java.util.UUID;
 public class TripRequest {
     
     @NotNull(message = "Route ID is required")
+    @NonNull
     private UUID routeId;
 
     @NotNull(message = "Bus ID is required")
+    @NonNull
     private UUID busId;
 
     @NotNull(message = "Departure time is required")
