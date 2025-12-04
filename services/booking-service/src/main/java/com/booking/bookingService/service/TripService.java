@@ -295,7 +295,6 @@ public class TripService {
                     .seatId(seat.getId().toString())
                     .seatCode(seat.getSeatCode())
                     // Safe check for seat type name
-                    .type(seat.getSeatType() != null ? seat.getSeatType().getName() : "Standard")
                     .deck(seat.getDeckNumber())
                     .price(trip.getPrice()) 
                     .status(status)

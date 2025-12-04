@@ -24,7 +24,4 @@ public class Seat {
     private int gridCol;    // Horizontal position (1, 2, 3, 4, 5...)
     private int deckNumber; // 1 or 2
 
-    @ManyToOne
-    @JoinColumn(name = "seat_type_id")
-    private SeatType seatType;
 }

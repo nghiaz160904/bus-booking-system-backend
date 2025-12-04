@@ -6,11 +6,9 @@ import com.booking.bookingService.exception.ResourceNotFoundException;
 import com.booking.bookingService.model.Bus;
 import com.booking.bookingService.model.Operator;
 import com.booking.bookingService.model.Seat;
-import com.booking.bookingService.model.SeatType;
 import com.booking.bookingService.repository.BusRepository;
 import com.booking.bookingService.repository.OperatorRepository;
 import com.booking.bookingService.repository.SeatRepository;
-import com.booking.bookingService.repository.SeatTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,7 +23,6 @@ public class BusService {
     private final BusRepository busRepository;
     private final OperatorRepository operatorRepository;
     private final SeatRepository seatRepository;
-    private final SeatTypeRepository seatTypeRepository;
 
     public Bus createBus(BusRequest request) {
         Operator operator = operatorRepository.findById(request.getOperatorId())
@@ -82,25 +79,12 @@ public class BusService {
 
         // Map DTOs to Entities
         List<Seat> newSeats = seatDefinitions.stream().map(def -> {
-            
-            // FIX: Determine the Type Name (use Bus default if SeatDefinition is null)
-            String typeName = def.getType() != null ? def.getType() : bus.getType();
-
-            // FIX: Find the actual SeatType Entity
-            // If the type doesn't exist for this operator, this will throw an exception.
-            // In a real app, you might want to create it on the fly or throw a clearer error.
-            SeatType seatTypeEntity = seatTypeRepository
-                    .findByNameAndOperatorId(typeName, bus.getOperator().getId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                        "SeatType not found: " + typeName + " for Operator: " + bus.getOperator().getName()));
-
             return Seat.builder()
                 .bus(bus)
                 .seatCode(def.getSeatCode())
                 .gridRow(def.getRow())
                 .gridCol(def.getCol())
                 .deckNumber(def.getDeck())
-                .seatType(seatTypeEntity) // FIX: Set the Entity, not Enum
                 .build();
         }).collect(Collectors.toList());
 

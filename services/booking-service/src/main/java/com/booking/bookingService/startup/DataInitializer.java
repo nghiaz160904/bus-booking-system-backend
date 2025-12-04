@@ -23,7 +23,7 @@ import java.util.Map;
 
 /**
  * Bootstraps the application with initial data.
- * UPDATED: Now clears existing data on startup to ensure new logic (like grid coordinates) applies.
+ * UPDATED: Removed cleanup for non-existent 'seat_type' table.
  */
 @Component
 @RequiredArgsConstructor
@@ -36,7 +36,6 @@ public class DataInitializer implements CommandLineRunner {
     private final TripRepository tripRepository;
     private final SeatRepository seatRepository;
     private final SeatStatusRepository seatStatusRepository;
-    private final SeatTypeRepository seatTypeRepository;
     private final ObjectMapper objectMapper;
 
     @PersistenceContext
@@ -45,7 +44,7 @@ public class DataInitializer implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) throws Exception {
-        // --- PHẦN MỚI: XÓA DỮ LIỆU CŨ (CLEAN UP) ---
+        // --- 1. CLEAN UP EXISTING DATA ---
         log.info("Cleaning up existing data to ensure a fresh start...");
         
         // Use native SQL to avoid entity loading issues
@@ -55,7 +54,7 @@ public class DataInitializer implements CommandLineRunner {
             entityManager.createNativeQuery("TRUNCATE TABLE seat CASCADE").executeUpdate();
             entityManager.createNativeQuery("TRUNCATE TABLE route CASCADE").executeUpdate();
             entityManager.createNativeQuery("TRUNCATE TABLE bus CASCADE").executeUpdate();
-            entityManager.createNativeQuery("TRUNCATE TABLE seat_type CASCADE").executeUpdate();
+            // REMOVED: entityManager.createNativeQuery("TRUNCATE TABLE seat_type CASCADE").executeUpdate();
             entityManager.createNativeQuery("TRUNCATE TABLE operator CASCADE").executeUpdate();
             entityManager.flush();
         } catch (Exception e) {
@@ -66,7 +65,7 @@ public class DataInitializer implements CommandLineRunner {
             entityManager.createNativeQuery("DELETE FROM seat").executeUpdate();
             entityManager.createNativeQuery("DELETE FROM route").executeUpdate();
             entityManager.createNativeQuery("DELETE FROM bus").executeUpdate();
-            entityManager.createNativeQuery("DELETE FROM seat_type").executeUpdate();
+            // REMOVED: entityManager.createNativeQuery("DELETE FROM seat_type").executeUpdate();
             entityManager.createNativeQuery("DELETE FROM operator").executeUpdate();
         }
 
@@ -82,9 +81,8 @@ public class DataInitializer implements CommandLineRunner {
             Map<String, Operator> operatorCache = new HashMap<>();
             Map<String, Bus> busCache = new HashMap<>();
             Map<String, Route> routeCache = new HashMap<>();
-            Map<String, SeatType> seatTypeCache = new HashMap<>();
 
-            // A. Create Operators & Seat Types
+            // A. Create Operators
             for (OperatorData opData : data.getOperators()) {
                 Operator op = Operator.builder()
                         .name(opData.getName())
@@ -93,8 +91,6 @@ public class DataInitializer implements CommandLineRunner {
                         .build();
                 operatorRepository.save(op);
                 operatorCache.put(opData.getKey(), op);
-
-                initializeDefaultSeatTypes(op, seatTypeCache);
             }
 
             // B. Create Buses & Seats
@@ -112,7 +108,7 @@ public class DataInitializer implements CommandLineRunner {
                 busRepository.save(bus);
                 busCache.put(busData.getKey(), bus);
 
-                generatePhysicalSeatsForBus(bus, seatTypeCache);
+                generatePhysicalSeatsForBus(bus);
             }
 
             // C. Create Routes
@@ -166,21 +162,7 @@ public class DataInitializer implements CommandLineRunner {
         }
     }
 
-    private void initializeDefaultSeatTypes(Operator op, Map<String, SeatType> cache) {
-        String[] defaultTypes = {"Sleeper", "Limousine", "Standard"};
-        for (String typeName : defaultTypes) {
-            SeatType seatType = SeatType.builder()
-                    .name(typeName)
-                    .description("Standard configuration for " + typeName)
-                    .price(BigDecimal.ZERO)
-                    .operator(op)
-                    .build();
-            seatTypeRepository.save(seatType);
-            cache.put(op.getId() + "_" + typeName, seatType);
-        }
-    }
-
-    private void generatePhysicalSeatsForBus(Bus bus, Map<String, SeatType> typeCache) {
+    private void generatePhysicalSeatsForBus(Bus bus) {
         List<Seat> seats = new ArrayList<>();
         String[] columns = {"A", "B", "C"};
         int seatsPerRow = columns.length;
@@ -188,16 +170,6 @@ public class DataInitializer implements CommandLineRunner {
 
         if (bus.getOperator() == null) {
             throw new IllegalStateException("Bus operator is null for bus " + bus.getId());
-        }
-
-        String cacheKey = bus.getOperator().getId() + "_" + (bus.getType() != null ? bus.getType() : "Standard");
-        SeatType typeEntity = typeCache.get(cacheKey);
-
-        if (typeEntity == null) {
-            typeEntity = typeCache.values().stream()
-                    .filter(t -> t.getOperator().getId().equals(bus.getOperator().getId()))
-                    .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("No SeatTypes defined for operator"));
         }
 
         for (int row = 1; row <= rows; row++) {
@@ -208,7 +180,6 @@ public class DataInitializer implements CommandLineRunner {
                 Seat seat = Seat.builder()
                         .bus(bus)
                         .seatCode(col + String.format("%02d", row))
-                        .seatType(typeEntity)
                         .deckNumber(1)
                         .gridRow(row)       // persist row index
                         .gridCol(colIdx)    // persist column index
